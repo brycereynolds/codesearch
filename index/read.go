@@ -427,16 +427,44 @@ func mmap(file string) mmapData {
 }
 
 // File returns the name of the index file to use.
-// It is either $CSEARCHINDEX or $HOME/.csearchindex.
+// It is either $CSEARCHINDEX, a .csearchindex file in the PWD or an
+// ancestor dir, or $HOME/.csearchindex as a last resort
 func File() string {
 	f := os.Getenv("CSEARCHINDEX")
 	if f != "" {
 		return f
 	}
+
 	var home string
 	home = os.Getenv("HOME")
 	if runtime.GOOS == "windows" && home == "" {
 		home = os.Getenv("USERPROFILE")
 	}
-	return filepath.Clean(home + "/.csearchindex")
+	home = filepath.Join(home, ".csearchindex")
+
+	pwd, err := filepath.Abs(".")
+	if err != nil {
+		return home
+	}
+
+	for {
+		candidate := filepath.Join(pwd, ".csearchindex")
+		f, err := os.Open(candidate)
+		f.Close()
+
+		// found one!
+		if err == nil {
+			return candidate
+		}
+
+		newPwd := filepath.Dir(pwd)
+		if newPwd == pwd {
+			// hit the root dir
+			break
+		}
+		pwd = newPwd
+	}
+
+	return home
+
 }
